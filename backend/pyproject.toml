@@ -1,0 +1,123 @@
+[project]
+name = "ai-customer-service-backend"
+version = "0.1.0"
+description = "面试演示型多租户手串售后智能客服 Agent 后端"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.110,<1.0",
+    "uvicorn[standard]>=0.27",
+    "pydantic>=2.5,<3.0",
+    "pydantic-settings>=2.2",
+    "sqlalchemy>=2.0,<3.0",
+    "psycopg[binary,pool]>=3.1",
+    "alembic>=1.13",
+    "redis>=5.0",
+    "structlog>=24.0",
+    "httpx>=0.26",
+    "pyjwt>=2.8",
+]
+
+[project.optional-dependencies]
+# ---- 生产/真 LLM 路径 ----
+llm = [
+    "langchain>=1.4,<2.0",
+    "langchain-openai>=1.6,<2.0",
+    "langgraph>=1.2,<1.3",
+    "langgraph-checkpoint-redis>=0.5",
+    "langsmith>=0.14",
+    "openai>=2.45,<4",
+    "tenacity>=8.0",
+]
+# ---- 向量（langchain_postgres.PGVectorStore，原生 pgvector `<=>` 检索）----
+vector = [
+    "pgvector>=0.3",
+    "langchain-postgres>=0.0.18",
+    "langchain-text-splitters>=1.0",
+]
+# ---- 演示/本地开发（MVP 最小集：Python 侧算余弦、JSON 日志、Form 上传）----
+demo = [
+    "orjson>=3.10",
+    "python-json-logger>=2.0",
+    "python-multipart>=0.0.9",
+]
+# ---- 开发/测试 ----
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "pytest-cov>=5.0",
+    "pytest-httpx>=0.30",
+    "ruff>=0.5",
+    "factory-boy>=3.3",
+    "faker>=28.0",
+]
+
+[project.scripts]
+seed-all = "scripts.seed_all:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app", "scripts"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+python_files = ["test_*.py", "*_test.py"]
+addopts = "-ra --strict-config --strict-markers --tb=short"
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py314"
+
+[tool.ruff.lint]
+select = [
+    "E", "F", "W", "I", "N", "UP", "B", "A",
+    "C4", "SIM", "TCH", "RUF",
+    "PERF",
+    "FURB",
+]
+ignore = [
+    "D",
+    "E501",
+    "TRY003",
+    "RUF001", "RUF002", "RUF003",
+    "BLE001",
+    "TRY",
+    "UP017", "UP042", "UP047",
+    "SIM105",
+    "TCH",
+    "TC001", "TC002", "TC003",
+    "PYI",
+    "B008",
+    "C408",
+    "S",
+]
+dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*?[a-zA-Z0-9]+?))$"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101", "ARG", "D103", "S311"]
+"scripts/*" = ["T201", "INP001", "S603"]
+"alembic/*" = ["D103", "RUF012"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app", "scripts"]
+required-imports = ["from __future__ import annotations"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+
+[tool.cov]
+source = ["app"]
+omit = [
+    "app/main.py",
+    "alembic/*",
+    "scripts/*",
+    "tests/*",
+]

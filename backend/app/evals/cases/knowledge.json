@@ -1,0 +1,144 @@
+[
+  {
+    "case_id": "knowledge-001",
+    "tags": ["knowledge", "policy_field"],
+    "tenant_id": "tenant_a",
+    "message": "你们支持多少天无理由退货？",
+    "expected": {
+      "intent": "knowledge_qa",
+      "reference_answer": "支持 7 天无理由退换货，商品需保持原包装完好、不影响二次销售。",
+      "must_contain": ["7"]
+    }
+  },
+  {
+    "case_id": "knowledge-002",
+    "tags": ["knowledge", "policy_field"],
+    "tenant_id": "tenant_a",
+    "message": "非质量问题退货收手续费吗？",
+    "expected": {
+      "intent": "knowledge_qa",
+      "reference_answer": "不收取任何额外手续费，只需支付商品价格和运费（如有）。",
+      "must_contain": ["不收"]
+    }
+  },
+  {
+    "case_id": "knowledge-003",
+    "tags": ["knowledge", "policy_field"],
+    "tenant_id": "tenant_b",
+    "message": "你们支持7天无理由退货吗？",
+    "expected": {
+      "intent": "knowledge_qa",
+      "reference_answer": "本店商品不适用 7 天无理由退换，仅自签收之日起 30 天内因质量问题可退款或免费更换同款。",
+      "must_contain": ["质量"]
+    }
+  },
+  {
+    "case_id": "knowledge-004",
+    "tags": ["knowledge", "policy_field"],
+    "tenant_id": "tenant_b",
+    "message": "定制商品非质量问题可以退吗？",
+    "expected": {
+      "intent": "knowledge_qa",
+      "reference_answer": "定制商品非质量问题不支持退货。",
+      "must_contain": ["不"]
+    }
+  },
+  {
+    "case_id": "knowledge-005",
+    "tags": ["knowledge", "policy_field"],
+    "tenant_id": "tenant_c",
+    "message": "非质量问题退货手续费收多少？",
+    "expected": {
+      "intent": "knowledge_qa",
+      "reference_answer": "非质量问题退货收取商品实付金额 10% 的退货手续费。",
+      "must_contain": ["10%"]
+    }
+  },
+  {
+    "case_id": "knowledge-006",
+    "tags": ["knowledge", "policy_field"],
+    "tenant_id": "tenant_c",
+    "message": "你们支持几天无理由退货？",
+    "expected": {
+      "intent": "knowledge_qa",
+      "reference_answer": "支持 7 天无理由退换，商品需完好、包装配件齐全。",
+      "must_contain": ["7"]
+    }
+  },
+  {
+    "case_id": "knowledge-007",
+    "tags": ["knowledge", "policy_field"],
+    "tenant_id": "tenant_a",
+    "message": "质量问题多少天内可以退换？",
+    "expected": {
+      "intent": "knowledge_qa",
+      "reference_answer": "自签收之日起 30 天内出现质量问题，支持免费退换，来回运费由本店承担。",
+      "must_contain": ["30"]
+    }
+  },
+  {
+    "case_id": "knowledge-008",
+    "tags": ["knowledge", "rag"],
+    "tenant_id": "tenant_a",
+    "message": "支持哪些支付方式？",
+    "expected": {
+      "intent": "knowledge_qa",
+      "reference_answer": "支持微信支付、支付宝、银行卡、花呗等主流支付方式。",
+      "must_contain": ["微信"]
+    }
+  },
+  {
+    "case_id": "knowledge-009",
+    "tags": ["knowledge", "rag"],
+    "tenant_id": "tenant_a",
+    "message": "付款后多久发货？",
+    "expected": {
+      "intent": "knowledge_qa",
+      "reference_answer": "现货商品付款后 48 小时内发货，节假日可能顺延。",
+      "must_contain": ["48"]
+    }
+  },
+  {
+    "case_id": "knowledge-010",
+    "tags": ["knowledge", "rag"],
+    "tenant_id": "tenant_b",
+    "message": "如果经鉴定为假，你们怎么处理？",
+    "expected": {
+      "intent": "knowledge_qa",
+      "reference_answer": "全额退款并十倍赔偿，同时承担复检费。",
+      "must_contain": ["十倍"]
+    }
+  },
+  {
+    "case_id": "knowledge-011",
+    "tags": ["knowledge", "rag"],
+    "tenant_id": "tenant_c",
+    "message": "玉石手串平时如何保养？",
+    "expected": {
+      "intent": "knowledge_qa",
+      "reference_answer": "避免碰撞和接触化学品，定期用软布擦拭，不戴时密封保存。",
+      "must_contain": ["碰撞"]
+    }
+  },
+  {
+    "case_id": "knowledge-012",
+    "tags": ["knowledge", "boundary"],
+    "tenant_id": "tenant_a",
+    "message": "你们店里卖宠物猫吗？",
+    "expected": {
+      "intent": "simple_qa",
+      "reference_answer": "店铺仅售卖手串产品"
+    }
+  },
+  {
+    "case_id": "knowledge-013",
+    "tags": ["knowledge", "boundary"],
+    "tenant_id": "tenant_b",
+    "message": "你们可以帮忙洗车吗？",
+    "expected": {
+      "intent": "simple_qa",
+      "reference_answer": "店铺主营手串售卖服务，目前无法提供洗车服务",
+      "must_not_contain": ["洗车价格"]
+    }
+  }
+]

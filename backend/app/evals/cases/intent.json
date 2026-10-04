@@ -1,0 +1,86 @@
+[
+  {
+    "case_id": "intent-001",
+    "tags": ["intent", "simple_qa"],
+    "tenant_id": "tenant_a",
+    "message": "你好呀",
+    "expected": {"intent": "simple_qa"}
+  },
+  {
+    "case_id": "intent-002",
+    "tags": ["intent", "simple_qa"],
+    "tenant_id": "tenant_a",
+    "message": "好的，谢谢",
+    "expected": {"intent": "simple_qa"}
+  },
+  {
+    "case_id": "intent-003",
+    "tags": ["intent", "simple_qa"],
+    "tenant_id": "tenant_b",
+    "message": "在吗？",
+    "expected": {"intent": "simple_qa"}
+  },
+  {
+    "case_id": "intent-004",
+    "tags": ["intent", "handoff"],
+    "tenant_id": "tenant_a",
+    "message": "我要找人工客服",
+    "expected": {"intent": "handoff"}
+  },
+  {
+    "case_id": "intent-005",
+    "tags": ["intent", "handoff"],
+    "tenant_id": "tenant_b",
+    "message": "我要投诉你们，怎么回事啊！",
+    "expected": {"intent": "handoff"}
+  },
+  {
+    "case_id": "intent-006",
+    "tags": ["intent", "knowledge_qa"],
+    "tenant_id": "tenant_a",
+    "message": "你们的退换货政策是什么？",
+    "expected": {"intent": "knowledge_qa"}
+  },
+  {
+    "case_id": "intent-007",
+    "tags": ["intent", "knowledge_qa"],
+    "tenant_id": "tenant_c",
+    "message": "退款要收手续费吗？",
+    "expected": {"intent": "knowledge_qa"}
+  },
+  {
+    "case_id": "intent-008",
+    "tags": ["intent", "intent-task"],
+    "tenant_id": "tenant_a",
+    "message": "我要退款",
+    "expected": {"intent": "task", "hint": "refund"}
+  },
+  {
+    "case_id": "intent-009",
+    "tags": ["intent", "intent-task"],
+    "tenant_id": "tenant_a",
+    "message": "我想换货",
+    "expected": {"intent": "task", "hint": "exchange"}
+  },
+  {
+    "case_id": "intent-010",
+    "tags": ["intent", "intent-task"],
+    "tenant_id": "tenant_b",
+    "message": "帮我安排一下维修",
+    "expected": {"intent": "task", "hint": "repair"}
+  },
+  {
+    "case_id": "intent-011",
+    "tags": ["intent", "intent-task"],
+    "tenant_id": "tenant_a",
+    "message": "帮我取消订单",
+    "expected": {"intent": "task", "hint": "cancel"}
+  },
+  {
+    "case_id": "intent-012",
+    "tags": ["intent", "intent-task"],
+    "tenant_id": "tenant_a",
+    "message": "查一下订单 A-ORD-202509-001",
+    "expected": {"intent": "task", "hint": "order_status"}
+  }
+]

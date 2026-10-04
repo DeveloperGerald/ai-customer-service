@@ -1,0 +1,1 @@
+{"root":["./src/app.tsx","./src/demo-tokens.ts","./src/main.tsx","./src/vite-env.d.ts","./src/components/debugdecisionpanel.tsx","./src/components/evaluationpage.tsx","./src/components/identityswitcher.tsx","./src/components/messagebubble.tsx","./src/identity/identitycontext.tsx","./src/lib/sse-client.ts"],"version":"5.9.3"}

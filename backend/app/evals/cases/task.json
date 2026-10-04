@@ -1,0 +1,129 @@
+[
+  {
+    "case_id": "task-001",
+    "tags": ["task", "read", "order_query"],
+    "tenant_id": "tenant_a",
+    "message": "帮我查一下订单 A-ORD-202509-001",
+    "expected": {
+      "intent": "task",
+      "hint": "order_status",
+      "tool": "order_query",
+      "tool_result_contains": {
+        "order_no": "A-ORD-202509-001",
+        "status": "delivered"
+      }
+    }
+  },
+  {
+    "case_id": "task-002",
+    "tags": ["task", "read", "product_list"],
+    "tenant_id": "tenant_a",
+    "message": "看看你们现在在售的手串有哪些",
+    "expected": {
+      "intent": "task",
+      "hint": "product",
+      "tool": "product_list",
+      "tool_result_contains": {"count": 4}
+    }
+  },
+  {
+    "case_id": "task-003",
+    "tags": ["task", "read", "product_query"],
+    "tenant_id": "tenant_a",
+    "message": "查一下 SKU-A-NANHONG-007 这个商品",
+    "expected": {
+      "intent": "task",
+      "hint": "product",
+      "tool": "product_query",
+      "tool_result_contains": {
+        "sku_code": "SKU-A-NANHONG-007",
+        "status": "on_sale"
+      }
+    }
+  },
+  {
+    "case_id": "task-004",
+    "tags": ["task", "write", "refund"],
+    "tenant_id": "tenant_a",
+    "message": "我要退款，订单 A-ORD-202509-014",
+    "expected": {
+      "intent": "task",
+      "hint": "refund",
+      "tool": "refund_request",
+      "order_id": "aaaa0101-0000-0000-0000-000000000014",
+      "require_confirmation": true
+    }
+  },
+  {
+    "case_id": "task-005",
+    "tags": ["task", "write", "refund"],
+    "tenant_id": "tenant_b",
+    "message": "订单 B-ORD-202509-021 我想申请退款",
+    "expected": {
+      "intent": "task",
+      "hint": "refund",
+      "must_contain": ["非质量问题", "7天无理由"]
+    }
+  },
+  {
+    "case_id": "task-006",
+    "tags": ["task", "write", "exchange"],
+    "tenant_id": "tenant_a",
+    "message": "A-ORD-202509-002 我想换货",
+    "expected": {
+      "intent": "task",
+      "hint": "exchange",
+      "must_contain": ["7天", "无理由"]
+    }
+  },
+  {
+    "case_id": "task-007",
+    "tags": ["task", "write", "exchange"],
+    "tenant_id": "tenant_c",
+    "message": "订单 C-ORD-202509-022 帮我换货",
+    "expected": {
+      "intent": "task",
+      "hint": "exchange",
+      "must_contain": ["7天", "无理由"]
+    }
+  },
+  {
+    "case_id": "task-008",
+    "tags": ["task", "write", "repair"],
+    "tenant_id": "tenant_b",
+    "message": "B-ORD-202509-019 帮我安排维修",
+    "expected": {
+      "intent": "task",
+      "hint": "repair",
+      "tool": "repair_request",
+      "order_id": "bbbb0202-0000-0000-0000-000000000019",
+      "require_confirmation": true
+    }
+  },
+  {
+    "case_id": "task-009",
+    "tags": ["task", "write", "cancel"],
+    "tenant_id": "tenant_b",
+    "message": "把订单 B-ORD-202509-013 取消",
+    "expected": {
+      "intent": "task",
+      "hint": "cancel",
+      "tool": "cancel_order",
+      "order_id": "bbbb0202-0000-0000-0000-000000000013",
+      "require_confirmation": true
+    }
+  },
+  {
+    "case_id": "task-010",
+    "tags": ["task", "write", "cancel"],
+    "tenant_id": "tenant_a",
+    "message": "我要取消 A-ORD-202509-011",
+    "expected": {
+      "intent": "task",
+      "hint": "cancel",
+      "tool": "cancel_order",
+      "order_id": "aaaa0101-0000-0000-0000-000000000011",
+      "require_confirmation": true
+    }
+  }
+]

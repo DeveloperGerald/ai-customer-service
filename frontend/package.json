@@ -1,0 +1,26 @@
+{
+  "name": "ai-customer-service-frontend",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "手串售后智能客服前端 MVP（9-token 身份切换 + 聊天 + SSE 流式 + 决策 debug 面板）",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview --port 4173"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "autoprefixer": "^10.4.19",
+    "postcss": "^8.4.38",
+    "tailwindcss": "^3.4.4",
+    "typescript": "^5.4.5",
+    "vite": "^5.3.1"
+  }
+}

@@ -1,0 +1,114 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: ai_cs_postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ai_cs_demo
+      TZ: Asia/Shanghai
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d ai_cs_demo"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
+  redis:
+    # redis-stack-server 包含 RedisJSON + RediSearch 模块，langgraph-checkpoint-redis 的 AsyncRedisSaver 依赖 JSON.SET
+    # 必须通过 /entrypoint.sh 启动才能加载模块；直接调 redis-server 会跳过模块加载
+    image: redis/redis-stack-server:latest
+    container_name: ai_cs_redis
+    command: /entrypoint.sh --appendonly yes
+    environment:
+      TZ: Asia/Shanghai
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: ai_cs_backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      APP_ENV: local
+      LOG_LEVEL: INFO
+      JSON_LOG: "true"
+      # 容器内部网络：postgres/redis 用服务名解析，绝不能写 localhost
+      DB__URL: postgresql+psycopg://postgres:postgres@postgres:5432/ai_cs_demo
+      REDIS__URL: redis://redis:6379/0
+      SECURITY__DEMO_TOKEN_SECRET: ${SECURITY__DEMO_TOKEN_SECRET:-change-me-to-a-random-32-chars-string-please}
+      SECURITY__DEMO_TOKEN_TTL_SECONDS: 2592000
+      # 真实 LLM 配置：默认从 .env 读取；演示环境未填 API Key 时自动降级 mock
+      LLM__PROVIDER: ${LLM__PROVIDER:-openai}
+      LLM__EMBEDDING_PROVIDER: ${LLM__EMBEDDING_PROVIDER:-openai}
+      LLM__OPENAI_API_KEY: ${LLM__OPENAI_API_KEY:-}
+      LLM__OPENAI_BASE_URL: ${LLM__OPENAI_BASE_URL:-https://open.bigmodel.cn/api/paas/v4/}
+      LLM__CHAT_MODEL: ${LLM__CHAT_MODEL:-glm-4-flash}
+      LLM__CHAT_TEMPERATURE: ${LLM__CHAT_TEMPERATURE:-0.2}
+      LLM__CHAT_MAX_TOKENS: ${LLM__CHAT_MAX_TOKENS:-1024}
+      LLM__EMBEDDING_MODEL: ${LLM__EMBEDDING_MODEL:-embedding-3}
+      LLM__EMBEDDING_DIM: ${LLM__EMBEDDING_DIM:-1024}
+      LLM__EMBEDDING_REQUEST_TIMEOUT: ${LLM__EMBEDDING_REQUEST_TIMEOUT:-30.0}
+      LANGSMITH__API_KEY: ${LANGSMITH__API_KEY:-}
+      LANGSMITH__TRACING_ENABLED: ${LANGSMITH__TRACING_ENABLED:-false}
+      LANGSMITH__ENDPOINT: ${LANGSMITH__ENDPOINT:-https://api.smith.langchain.com}
+      LANGSMITH__PROJECT: ${LANGSMITH__PROJECT:-ai-customer-service-demo}
+      CORS_ORIGINS: '["http://localhost:5174","http://localhost:3000","http://127.0.0.1:5174"]'
+    env_file:
+      - ./.env
+    ports:
+      - "8000:8000"
+    # ⚠️ 生产/演示：不用 volumes 覆盖 /app（否则容器内 pip 装好的 app 包会被主机目录替换，ModuleNotFound）
+    # 想热更：另起一个单独 backend-dev 服务，本机 uvicorn --reload
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --log-level info
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request,sys; r=urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3); sys.exit(0 if r.status==200 else 1)"]
+      interval: 8s
+      timeout: 5s
+      retries: 15
+      start_period: 20s
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: frontend-dev
+    container_name: ai_cs_frontend
+    depends_on:
+      - backend
+    environment:
+      TZ: Asia/Shanghai
+      CHOKIDAR_USEPOLLING: "true"
+      VITE_BACKEND_BASE_URL: http://backend:8000
+    ports:
+      - "5174:5174"
+    volumes:
+      - ./frontend:/app
+      - frontend_node_modules:/app/node_modules
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+  frontend_node_modules:
