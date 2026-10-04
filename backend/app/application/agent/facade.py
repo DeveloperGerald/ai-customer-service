@@ -712,7 +712,11 @@ async def _detect_interrupt_pending(
                 if isinstance(value, dict):
                     return value
         # next 非空但没找到 interrupts value：返回最小标记
-        return {"tool": "unknown", "summary": "图已暂停，请确认是否继续执行。"}
+        return {
+            "tool": "unknown",
+            "action_label": "未知操作",
+            "summary": "图已暂停，请确认是否继续执行。",
+        }
     except Exception:  # pragma: no cover - get_state 失败兜底
         return None
 

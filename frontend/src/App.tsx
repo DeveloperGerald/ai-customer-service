@@ -353,6 +353,22 @@ function Shell() {
     });
   }, []);
 
+  // HITL 暂停时：本轮没有回复文本，移除 start 时创建的空 streaming agent 占位，
+  // 避免 [DONE] 终帧把它 finalize 成"（服务端无回复）"
+  const removeLastEmptyStreamingAgent = useCallback((tid: string) => {
+    setMessagesByThread((prev) => {
+      const list = [...(prev[tid] ?? [])];
+      const i = _lastAgentIndex(list);
+      if (i < 0) return prev;
+      const agent = list[i];
+      if (agent.streaming && !(agent.text ?? "").trim()) {
+        list.splice(i, 1);
+        return { ...prev, [tid]: list };
+      }
+      return prev;
+    });
+  }, []);
+
   // HITL 确认卡片状态更新：pending → approved/declined/timeout/error
   const updateConfirmation = useCallback(
     (
@@ -471,6 +487,8 @@ function Shell() {
         // SSE 流式
         const ctrl = new AbortController();
         abortRef.current = ctrl;
+        // 本轮是否暂停在 HITL 确认卡片：暂停后无回复文本，[DONE] 时不再 finalize 占位气泡
+        let hitlPaused = false;
 
         await streamChat({
           url: `/api/agent/conversations/${active.id}/stream`,
@@ -504,7 +522,9 @@ function Shell() {
                 });
                 break;
               case "confirmation_required": {
-                // HITL 暂停：写工具 interrupt 触发，本轮 SSE 流到此结束（后端不再发 reply/done）
+                // HITL 暂停：写工具 interrupt 触发，本轮只有确认卡片、没有回复文本
+                hitlPaused = true;
+                removeLastEmptyStreamingAgent(active.id);
                 const pa = evt.data?.pending_action ?? {};
                 append(active.id, {
                   role: "confirmation",
@@ -512,6 +532,10 @@ function Shell() {
                   confirmation: {
                     tool: pa.tool ?? "unknown",
                     args: pa.args ?? pa.arguments ?? {},
+                    actionLabel: pa.action_label,
+                    orderNo: pa.order_no,
+                    fields: Array.isArray(pa.fields) ? pa.fields : undefined,
+                    expiresAt: pa.expires_at,
                     status: "pending",
                   },
                 });
@@ -556,8 +580,8 @@ function Shell() {
               }
               case "done":
                 if (evt.data === "[DONE]") {
-                  // 终帧：确保 agent 文本 finalize（如果 reply_chunk 已累计，则 finalize 不覆盖）
-                  finalizeLastAgent(active.id);
+                  // HITL 暂停本轮无回复（占位已移除），不要再兜底出"（服务端无回复）"
+                  if (!hitlPaused) finalizeLastAgent(active.id);
                 }
                 break;
               default:
@@ -586,6 +610,7 @@ function Shell() {
     finalizeLastAgent,
     input,
     loadThreads,
+    removeLastEmptyStreamingAgent,
     running,
     streamMode,
     tenantId,

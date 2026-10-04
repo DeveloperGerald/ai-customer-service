@@ -1,4 +1,9 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
+
+export interface ConfirmationField {
+  label: string;
+  value: string;
+}
 
 export interface ChatMessageVM {
   id: string;
@@ -15,6 +20,14 @@ export interface ChatMessageVM {
   confirmation?: {
     tool: string;
     args: any;
+    /** 中文操作名，如 退款申请/换货申请/维修申请/取消订单 */
+    actionLabel?: string;
+    /** 业务订单号（卡片突出展示） */
+    orderNo?: string;
+    /** 结构化详情行（原因/金额/工单号等） */
+    fields?: ConfirmationField[];
+    /** 确认截止时间 ISO（TTL 10min，用于倒计时） */
+    expiresAt?: string;
     status: "pending" | "approved" | "declined" | "timeout" | "error";
     reason?: string;
   };
@@ -48,53 +61,11 @@ export function MessageBubble({
   }, [msg.role, msg.streaming, thinking]);
 
   if (msg.role === "confirmation" && msg.confirmation) {
-    const c = msg.confirmation;
-    const pending = c.status === "pending";
-    const statusText =
-      c.status === "approved"
-        ? "✓ 已确认，正在执行…"
-        : c.status === "declined"
-          ? `✗ 已取消${c.reason ? `：${c.reason}` : ""}`
-          : c.status === "timeout"
-            ? "⚠ 操作已超时，请重新发起"
-            : c.status === "error"
-              ? `⚠ ${c.reason ?? "执行失败"}`
-              : null;
     return (
-      <div className="mx-auto my-2 max-w-md rounded-xl border border-brand-200 bg-gradient-to-br from-brand-50 to-white p-4 text-sm shadow-sm ring-1 ring-brand-100">
-        <div className="mb-2 flex items-center gap-2">
-          <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-brand-500 text-sm font-bold text-white">
-            !
-          </span>
-          <div className="font-semibold text-brand-900">写操作需要您确认</div>
-        </div>
-        <div className="mb-1 text-xs text-brand-800">
-          工具：<span className="font-mono">{c.tool}</span>
-        </div>
-        <pre className="max-h-40 overflow-auto rounded border border-brand-200 bg-white p-2 text-[11px] text-slate-700">
-{typeof c.args === "object" && c.args !== null ? JSON.stringify(c.args, null, 2) : String(c.args)}
-        </pre>
-        {pending ? (
-          <div className="mt-3 flex items-center justify-end gap-2">
-            <button
-              type="button"
-              onClick={() => onConfirm?.(msg.id, false, "用户取消")}
-              className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50"
-            >
-              取消
-            </button>
-            <button
-              type="button"
-              onClick={() => onConfirm?.(msg.id, true)}
-              className="rounded-lg bg-brand-500 px-3 py-1.5 text-xs font-semibold text-white shadow transition hover:bg-brand-600"
-            >
-              确认执行
-            </button>
-          </div>
-        ) : (
-          <div className="mt-2 text-[11px] text-slate-500">{statusText}</div>
-        )}
-      </div>
+      <ConfirmationCard
+        c={msg.confirmation}
+        onConfirm={(decision, reason) => onConfirm?.(msg.id, decision, reason)}
+      />
     );
   }
 
@@ -173,6 +144,123 @@ export function MessageBubble({
           {formatTime(msg.createdAt)}
         </div>
       </div>
+    </div>
+  );
+}
+
+/** HITL 写操作确认卡片：操作名 + 订单号 + 结构化详情 + 10min 倒计时 */
+function ConfirmationCard({
+  c,
+  onConfirm,
+}: {
+  c: NonNullable<ChatMessageVM["confirmation"]>;
+  onConfirm: (decision: boolean, reason?: string) => void;
+}) {
+  const actionLabel = c.actionLabel || "写操作";
+  const pending = c.status === "pending";
+
+  // 剩余确认秒数（expiresAt 为 UTC ISO）；仅 pending 态计时
+  const [remaining, setRemaining] = useState<number | null>(
+    c.expiresAt
+      ? Math.max(0, Math.floor((new Date(c.expiresAt).getTime() - Date.now()) / 1000))
+      : null,
+  );
+  useEffect(() => {
+    if (!pending || !c.expiresAt) return;
+    const tick = () =>
+      setRemaining(
+        Math.max(0, Math.floor((new Date(c.expiresAt!).getTime() - Date.now()) / 1000)),
+      );
+    tick();
+    const timer = setInterval(tick, 1000);
+    return () => clearInterval(timer);
+  }, [pending, c.expiresAt]);
+  const expired = remaining !== null && remaining <= 0;
+  const countdown =
+    remaining !== null
+      ? `${String(Math.floor(remaining / 60)).padStart(2, "0")}:${String(
+          remaining % 60,
+        ).padStart(2, "0")}`
+      : null;
+
+  const statusText =
+    c.status === "approved"
+      ? "✓ 已确认，正在执行…"
+      : c.status === "declined"
+        ? `✗ 已取消${c.reason ? `：${c.reason}` : ""}`
+        : c.status === "timeout"
+          ? "⚠ 操作已超时，请重新发起"
+          : c.status === "error"
+            ? `⚠ ${c.reason ?? "执行失败"}`
+            : null;
+
+  return (
+    <div className="mx-auto my-2 w-full max-w-md rounded-xl border border-brand-200 bg-white p-4 text-sm shadow-sm">
+      <div className="mb-3 flex items-center gap-2">
+        <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-brand-500 text-sm font-bold text-white">
+          !
+        </span>
+        <div className="font-semibold text-slate-800">请确认：{actionLabel}</div>
+      </div>
+
+      {c.orderNo ? (
+        <div className="mb-2 flex items-center gap-2 rounded-lg bg-brand-50 px-3 py-2">
+          <span className="text-xs text-slate-500">订单号</span>
+          <span className="font-mono text-sm font-semibold text-brand-900">
+            {c.orderNo}
+          </span>
+        </div>
+      ) : null}
+
+      {c.fields && c.fields.length > 0 ? (
+        <dl className="divide-y divide-slate-100 rounded-lg border border-slate-200">
+          {c.fields.map((f, i) => (
+            <div
+              key={i}
+              className="flex items-start justify-between gap-3 px-3 py-1.5 text-xs"
+            >
+              <dt className="shrink-0 text-slate-500">{f.label}</dt>
+              <dd className="break-all text-right font-medium text-slate-800">
+                {f.value}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      ) : null}
+
+      {pending ? (
+        expired ? (
+          <div className="mt-3 text-center text-xs text-slate-400">
+            ⚠ 操作已超时，请重新发起
+          </div>
+        ) : (
+          <>
+            {countdown !== null ? (
+              <div className="mt-2 text-right text-[11px] text-slate-400">
+                {countdown} 后超时
+              </div>
+            ) : null}
+            <div className="mt-2 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => onConfirm(false, "用户取消")}
+                className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                onClick={() => onConfirm(true)}
+                className="rounded-lg bg-brand-500 px-3 py-1.5 text-xs font-semibold text-white shadow transition hover:bg-brand-600"
+              >
+                确认执行
+              </button>
+            </div>
+          </>
+        )
+      ) : (
+        <div className="mt-2 text-[11px] text-slate-500">{statusText}</div>
+      )}
     </div>
   );
 }

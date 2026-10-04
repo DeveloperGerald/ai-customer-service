@@ -167,24 +167,70 @@ def _build_order_detail_for_policy(row: OrderORM) -> dict[str, Any]:
     }
 
 
+# 写工具 → 卡片展示用中文操作名
+_ACTION_LABELS: dict[str, str] = {
+    "refund_request": "退款申请",
+    "exchange_request": "换货申请",
+    "repair_request": "维修申请",
+    "cancel_order": "取消订单",
+}
+
+# 写工具 reason 枚举 → 中文展示
+_REASON_LABELS: dict[str, dict[str, str]] = {
+    "refund_request": {
+        "7_day_return": "7天无理由退货",
+        "quality": "质量问题",
+        "wrong_good": "发错商品",
+        "other": "其他",
+    },
+    "exchange_request": {
+        "quality": "质量问题",
+        "size": "尺码不合适",
+        "wrong_good": "发错商品",
+        "other": "其他",
+    },
+    "cancel_order": {
+        "no_longer_needed": "不想要了",
+        "wrong_order": "下错订单",
+        "price_change": "价格变动",
+        "other": "其他",
+    },
+}
+
+
+def _reason_label(tool_name: str, reason: str) -> str:
+    return _REASON_LABELS.get(tool_name, {}).get(reason, reason)
+
+
 def _build_pending(
     *,
     tool_name: str,
     args_dict: dict[str, Any],
     summary: str,
     order_no: str | None = None,
+    fields: list[tuple[str, str]] | None = None,
     ttl_seconds: int = _HITL_TTL_SECONDS,
 ) -> dict[str, Any]:
-    """构造 interrupt(pending) 的 pending payload（前端展示确认弹窗 + 过期倒计时用）。"""
+    """构造 interrupt(pending) 的 pending payload（前端展示确认卡片 + 过期倒计时用）。
+
+    展示字段：
+      - action_label：中文操作名（退款申请/换货申请/维修申请/取消订单）
+      - order_no：业务订单号（顶层固定位，卡片突出展示）
+      - fields：[(label, value), ...] 结构化详情行（原因/金额/工单号等）
+      - expires_at：确认截止时间（ISO，TTL 10min）
+    """
     expires_at = (datetime.now(timezone.utc) + timedelta(seconds=ttl_seconds)).isoformat()
     pending: dict[str, Any] = {
         "tool": tool_name,
+        "action_label": _ACTION_LABELS.get(tool_name, tool_name),
         "args": args_dict,
         "summary": summary,
         "expires_at": expires_at,
     }
     if order_no:
         pending["order_no"] = order_no
+    if fields:
+        pending["fields"] = [{"label": label, "value": value} for label, value in fields]
     return pending
 
 
@@ -445,11 +491,18 @@ async def exchange_request(
         thread_id=ctx.thread_id,
         seed=f"exchange:{order_id}:{reason}:{remark or ''}",
     )
+    fields: list[tuple[str, str]] = [
+        ("原因", _reason_label("exchange_request", reason)),
+    ]
+    if remark:
+        fields.append(("备注", remark))
+    fields.append(("工单号", ticket_no))
     pending = _build_pending(
         tool_name="exchange_request",
         args_dict={"order_id": order_id, "reason": reason, "remark": remark},
         summary=f"换货申请：订单 {row.order_no}，原因 {reason}（工单号 {ticket_no}）",
         order_no=row.order_no,
+        fields=fields,
     )
     resume_value = interrupt(pending)
     if not (isinstance(resume_value, dict) and resume_value.get("confirmed")):
@@ -527,6 +580,7 @@ async def repair_request(
         args_dict={"order_id": order_id, "issue_desc": issue_desc},
         summary=f"维修申请：订单 {row.order_no}，故障 {issue_desc}（工单号 {ticket_no}）",
         order_no=row.order_no,
+        fields=[("故障描述", issue_desc), ("工单号", ticket_no)],
     )
     resume_value = interrupt(pending)
     if not (isinstance(resume_value, dict) and resume_value.get("confirmed")):
@@ -611,6 +665,12 @@ async def refund_request(
             f"退款金额 {refund_amount or 0} 分，手续费 {fee_pct}%（工单号 {ticket_no}）"
         ),
         order_no=row.order_no,
+        fields=[
+            ("原因", _reason_label("refund_request", reason)),
+            ("退款金额", f"¥{(refund_amount or 0) / 100:.2f}"),
+            ("手续费", f"{fee_pct}%"),
+            ("工单号", ticket_no),
+        ],
     )
     resume_value = interrupt(pending)
     if not (isinstance(resume_value, dict) and resume_value.get("confirmed")):
@@ -692,11 +752,18 @@ async def cancel_order(
         thread_id=ctx.thread_id,
         seed=f"cancel:{order_id}:{reason}:{remark or ''}",
     )
+    cancel_fields: list[tuple[str, str]] = [
+        ("原因", _reason_label("cancel_order", reason)),
+    ]
+    if remark:
+        cancel_fields.append(("备注", remark))
+    cancel_fields.append(("工单号", ticket_no))
     pending = _build_pending(
         tool_name="cancel_order",
         args_dict={"order_id": order_id, "reason": reason, "remark": remark},
         summary=f"取消订单：{row.order_no}，原因 {reason}（工单号 {ticket_no}）",
         order_no=row.order_no,
+        fields=cancel_fields,
     )
     resume_value = interrupt(pending)
     if not (isinstance(resume_value, dict) and resume_value.get("confirmed")):
