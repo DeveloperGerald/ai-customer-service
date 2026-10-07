@@ -120,6 +120,12 @@ function _lastAgentIndex(list: ChatMessageVM[]): number {
   return -1;
 }
 
+// 模块级：同一页面生命周期内按 (tenant, actor) 去重自动创建的会话。
+// 组件重复挂载（React StrictMode / Fast Refresh / 重挂载）时复用同一会话，
+// 避免每次挂载都 POST 出重复的空会话；整页刷新后 Map 重置，重新建新会话。
+const autoBootedThreads = new Map<string, ThreadVM>();
+const autoBootPromises = new Map<string, Promise<ThreadVM | null>>();
+
 const EXAMPLE_PROMPTS: string[] = [
   "你好，你们支持几天无理由退货？",
   "我要退款 订单 SO-1001 刚收到不喜欢",
@@ -154,6 +160,9 @@ function Shell() {
   const [threadsLoading, setThreadsLoading] = useState(false);
   const [threadsError, setThreadsError] = useState<string | null>(null);
   const [creatingThread, setCreatingThread] = useState(false);
+  // 新建会话防重入：用 ref 而非 state 做守卫，保证 newThread 的回调身份稳定
+  // （否则其随 creatingThread 变化，会让依赖它的 effect 反复重跑）
+  const creatingRef = useRef(false);
   // 已拉取过历史消息的 thread_id（避免选中时重复拉取覆盖本地流式消息）
   const hydratedRef = useRef<Set<string>>(new Set());
 
@@ -189,19 +198,6 @@ function Shell() {
     },
     [tenantId, bearer],
   );
-
-  // 会话列表仅 consumer 可见：身份切换时清空本地数据并重新拉取真实列表
-  useEffect(() => {
-    if (!isConsumer) {
-      setThreads([]);
-      setActiveId("");
-      setThreadsError(null);
-      return;
-    }
-    hydratedRef.current = new Set();
-    setMessagesByThread({});
-    void loadThreads();
-  }, [isConsumer, current.actor_id, current.tenant_id, loadThreads]);
 
   // 选中某条历史会话时，拉取后端落库的消息（仅首次选中拉取，之后以本地流式状态为准）
   useEffect(() => {
@@ -403,9 +399,11 @@ function Shell() {
   const [streamMode] = useState<"sync" | "sse">("sse");
   const abortRef = useRef<AbortController | null>(null);
 
-  // 新建会话：真实调用 POST /api/conversations，由后端生成 thread_id
-  const newThread = useCallback(async () => {
-    if (creatingThread) return;
+  // 新建会话：真实调用 POST /api/conversations，由后端生成 thread_id。
+  // 返回新建的会话对象（失败/并发去重时返回 null）
+  const newThread = useCallback(async (): Promise<ThreadVM | null> => {
+    if (creatingRef.current) return null;
+    creatingRef.current = true;
     setCreatingThread(true);
     setThreadsError(null);
     try {
@@ -429,12 +427,69 @@ function Shell() {
       setActiveId(nt.id);
       setNav("chat");
       setInput("");
+      return nt;
     } catch (e) {
       setThreadsError(e instanceof Error ? e.message : String(e));
+      return null;
     } finally {
+      creatingRef.current = false;
       setCreatingThread(false);
     }
-  }, [bearer, creatingThread, tenantId]);
+  }, [bearer, tenantId]);
+
+  // consumer 首次加载/切换身份：自动创建并打开一个新会话，再拉取会话列表。
+  // 新建的空会话 last_message_at 为 NULL，后端按 NULLS LAST 排序置底，且会话数
+  // 超过 limit=50 时会被截断 —— 因此拉取列表后必须本地补回并置顶，保证打开的是新会话。
+  useEffect(() => {
+    if (!isConsumer) {
+      setThreads([]);
+      setActiveId("");
+      setThreadsError(null);
+      return;
+    }
+    const bootKey = `${current.tenant_id}:${current.actor_id}`;
+    hydratedRef.current = new Set();
+    setMessagesByThread({});
+    const ensureTop = (t: ThreadVM) => {
+      setThreads((prev) => {
+        const i = prev.findIndex((x) => x.id === t.id);
+        if (i === 0) return prev;
+        if (i > 0) {
+          const list = [...prev];
+          const [m] = list.splice(i, 1);
+          return [m, ...list];
+        }
+        return [t, ...prev];
+      });
+    };
+    void (async () => {
+      let nt = autoBootedThreads.get(bootKey) ?? null;
+      if (!nt) {
+        let p = autoBootPromises.get(bootKey);
+        if (!p) {
+          p = newThread().then((t) => {
+            if (t) autoBootedThreads.set(bootKey, t);
+            else autoBootPromises.delete(bootKey); // 失败允许下次重试
+            return t;
+          });
+          autoBootPromises.set(bootKey, p);
+        }
+        nt = await p;
+      }
+      if (!nt) {
+        // 创建失败（后端不可用等）：退回加载历史列表
+        await loadThreads();
+        return;
+      }
+      hydratedRef.current.add(nt.id);
+      ensureTop(nt);
+      setActiveId(nt.id);
+      await loadThreads({ keepActive: true });
+      ensureTop(nt);
+      // keepActive 可能因新会话被 limit=50 截断而回退选中旧会话，这里强制回到新会话
+      setActiveId(nt.id);
+    })();
+  }, [isConsumer, current.actor_id, current.tenant_id, loadThreads, newThread]);
 
   const send = useCallback(async () => {
     if (!active || running || !input.trim()) return;
@@ -565,6 +620,47 @@ function Shell() {
                     ...prev,
                     [active.id]: payload,
                   }));
+                  // 方案 A：把 RAG 命中作为引用角标挂到本轮最后一条 agent 消息
+                  const hits = Array.isArray(payload?.rag_hits)
+                    ? payload.rag_hits
+                    : null;
+                  if (hits && hits.length > 0) {
+                    setMessagesByThread((prev) => {
+                      const list = [...(prev[active.id] ?? [])];
+                      const i = _lastAgentIndex(list);
+                      if (i < 0) return prev;
+                      const m = list[i];
+                      if (m.role !== "agent") return prev;
+                      // 后端 rag_retrieve_node 顶层字段：chunk_id/content/similarity/metadata{doc_name,title}
+                      // 兼容 vectorstore.search 直返的顶层 title/source
+                      const citations = hits.map((h: any) => {
+                        const meta =
+                          h && typeof h.metadata === "object" ? h.metadata : {};
+                        return {
+                          chunk_id:
+                            typeof h?.chunk_id === "string"
+                              ? h.chunk_id
+                              : undefined,
+                          content:
+                            typeof h?.content === "string" ? h.content : "",
+                          title:
+                            (typeof meta.title === "string" && meta.title) ||
+                            (typeof h?.title === "string" && h.title) ||
+                            undefined,
+                          doc_name:
+                            typeof meta.doc_name === "string"
+                              ? meta.doc_name
+                              : undefined,
+                          similarity:
+                            typeof h?.similarity === "number"
+                              ? h.similarity
+                              : undefined,
+                        };
+                      });
+                      list[i] = { ...m, citations };
+                      return { ...prev, [active.id]: list };
+                    });
+                  }
                 }
                 break;
               case "node":

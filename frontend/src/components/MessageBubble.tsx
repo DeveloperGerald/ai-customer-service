@@ -5,6 +5,15 @@ export interface ConfirmationField {
   value: string;
 }
 
+/** RAG 命中引用：debug 事件 payload.rag_hits[*] 的精简结构 */
+export interface Citation {
+  chunk_id?: string;
+  content: string;
+  title?: string;
+  doc_name?: string;
+  similarity?: number;
+}
+
 export interface ChatMessageVM {
   id: string;
   role: "human" | "agent" | "tool" | "handoff" | "system" | "confirmation";
@@ -31,6 +40,8 @@ export interface ChatMessageVM {
     status: "pending" | "approved" | "declined" | "timeout" | "error";
     reason?: string;
   };
+  /** RAG 引用角标：本轮回复结束时由 debug 事件携带，挂在最后一条 agent 消息上 */
+  citations?: Citation[];
 }
 
 function formatTime(ts: number) {
@@ -112,6 +123,8 @@ export function MessageBubble({
     );
   }
 
+  const hasCitations = !isMe && !thinking && Array.isArray(msg.citations) && msg.citations.length > 0;
+
   return (
     <div className={"my-2 flex " + (isMe ? "justify-end" : "justify-start")}>
       <div
@@ -133,8 +146,9 @@ export function MessageBubble({
               </span>
             </span>
           ) : (
-            msg.text || " "
+            msg.text || " "
           )}
+          {hasCitations ? <Citations citations={msg.citations!} /> : null}
         </div>
         <div
           className={
@@ -145,6 +159,52 @@ export function MessageBubble({
         </div>
       </div>
     </div>
+  );
+}
+
+/** RAG 引用角标 + hover tooltip：纯 CSS 实现，无第三方依赖 */
+function Citations({ citations }: { citations: Citation[] }) {
+  return (
+    <sup className="ml-1 inline-flex align-top">
+      {citations.map((c, i) => {
+        const idx = i + 1;
+        const title = c.title?.trim() || c.doc_name?.trim() || "";
+        const sim =
+          typeof c.similarity === "number"
+            ? `${(c.similarity * 100).toFixed(0)}%`
+            : null;
+        return (
+          <span key={i} className="group relative ml-0.5 align-top">
+            <span className="cursor-default rounded px-1 text-[10px] font-medium text-brand-600 ring-1 ring-inset ring-brand-200 group-hover:bg-brand-100">
+              [{idx}]
+            </span>
+            <div
+              role="tooltip"
+              className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-1 w-72 -translate-x-1/2 scale-95 rounded-lg border border-slate-200 bg-white p-2 text-[11px] text-slate-700 opacity-0 shadow-lg transition-all duration-100 group-hover:pointer-events-auto group-hover:scale-100 group-hover:opacity-100"
+            >
+              <div className="mb-1 flex items-center justify-between gap-2">
+                <span className="font-mono text-[10px] text-brand-700">
+                  引用 {idx}
+                </span>
+                {sim ? (
+                  <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] text-emerald-700">
+                    相似度 {sim}
+                  </span>
+                ) : null}
+              </div>
+              {title ? (
+                <div className="mb-1 truncate font-medium text-slate-800">
+                  {title}
+                </div>
+              ) : null}
+              <div className="max-h-40 overflow-auto whitespace-pre-wrap break-words leading-relaxed text-slate-600">
+                {c.content?.trim() || "（空切片）"}
+              </div>
+            </div>
+          </span>
+        );
+      })}
+    </sup>
   );
 }
 
